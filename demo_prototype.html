@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Station Safety Inspector</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f4f6fa;--card:#fff;--tx:#12203a;--mu:#5b6b85;--bd:#d9e0ec;--ac:#2f6fed;--ok:#1a9c5b;--bad:#d93a3a}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1420;--card:#16202f;--tx:#e7edf7;--mu:#93a3bd;--bd:#26344a;--ac:#5b93ff;--ok:#3ecb86;--bad:#ff6b6b}}
+:root[data-theme="dark"]{--bg:#0d1420;--card:#16202f;--tx:#e7edf7;--mu:#93a3bd;--bd:#26344a;--ac:#5b93ff;--ok:#3ecb86;--bad:#ff6b6b}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,Segoe UI,sans-serif;line-height:1.45}
+main{max-width:980px;margin:0 auto;padding:18px}
+h1{font-size:22px;margin:0 0 4px}p.s{color:var(--mu);margin:0 0 14px;font-size:14px}
+.g{display:grid;grid-template-columns:1.6fr 1fr;gap:14px}@media(max-width:760px){.g{grid-template-columns:1fr}}
+.c{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px}
+.c h2{font-size:15px;margin:0 0 10px}
+svg{width:100%;height:auto;border-radius:8px;background:#1b2433;display:block}
+.tg{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.tg label{font-size:12px;border:1px solid var(--bd);border-radius:20px;padding:4px 10px;cursor:pointer;user-select:none}
+button{background:var(--ac);color:#fff;border:0;border-radius:8px;padding:9px 16px;font-size:14px;cursor:pointer}
+ul{list-style:none;margin:0;padding:0}li{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bd);font-size:14px}
+.ok{color:var(--ok);font-weight:600}.no{color:var(--bad);font-weight:600}
+.al{margin-top:10px;padding:10px;border-radius:8px;font-size:14px;background:color-mix(in srgb,var(--ok) 14%,transparent)}
+.al.bad{background:color-mix(in srgb,var(--bad) 16%,transparent)}
+.m{font-size:12px;color:var(--mu);margin-top:8px}
+.f{margin-top:14px}.f ol{margin:6px 0 0;padding-left:20px;font-size:14px}
+</style></head><body><main>
+<h1>Station Safety Inspector</h1>
+<p class="s">Prototype: checks an image of a space station for the 7 required safety objects (YOLO + Falcon synthetic data).</p>
+<div class="g">
+<div class="c"><h2>Camera view (simulated scene)</h2>
+<svg id="sc" viewBox="0 0 700 340"></svg>
+<div class="tg" id="tg"></div>
+<button id="run">Run inspection</button>
+<div class="m">Demo mode: boxes are simulated. Swap in your trained best.pt to get real detections.</div></div>
+<div class="c"><h2>Inspection report</h2><ul id="ls"></ul><div id="al" class="al" hidden></div>
+<div class="m">Inspections run: <b id="n">0</b> · Objects checked: <b id="o">0</b></div></div>
+</div>
+<div class="c f"><h2>How Falcon keeps the model up to date</h2><ol>
+<li>Camera flags low-confidence or missed objects in the field.</li>
+<li>Recreate that object/lighting/angle in the Falcon digital twin.</li>
+<li>Generate new labeled synthetic images automatically.</li>
+<li>Retrain YOLO, compare mAP@0.5 with the baseline, redeploy if better.</li></ol></div>
+</main>
+<script>
+const I=[
+{k:"OxygenTank",x:40,y:190,w:40,h:120,c:"#3cb371",f:"#2e8b57"},
+{k:"NitrogenTank",x:100,y:190,w:40,h:120,c:"#5bc0de",f:"#8a6a66"},
+{k:"FirstAidBox",x:180,y:255,w:110,h:55,c:"#f2f2f2",f:"#b8402f"},
+{k:"FireAlarm",x:330,y:80,w:36,h:52,c:"#00e0d0",f:"#e8622c"},
+{k:"SafetySwitchPanel",x:410,y:60,w:84,h:114,c:"#8fa8ff",f:"#8a8f99"},
+{k:"EmergencyPhone",x:545,y:85,w:40,h:72,c:"#ff6bd6",f:"#d4a94a"},
+{k:"FireExtinguisher",x:625,y:185,w:36,h:125,c:"#ff5a5a",f:"#c0392b"}];
+const on={};I.forEach(i=>on[i.k]=true);
+const sc=document.getElementById("sc"),tg=document.getElementById("tg"),ls=document.getElementById("ls");
+let runs=0,objs=0,det=null;
+function draw(){
+let s='<rect width="700" height="340" fill="#232d3f"/><rect y="310" width="700" height="30" fill="#141a26"/>';
+I.forEach(i=>{if(on[i.k])s+=`<rect x="${i.x}" y="${i.y}" width="${i.w}" height="${i.h}" rx="6" fill="${i.f}"/>`});
+if(det)I.forEach((i,n)=>{if(det[i.k]){s+=`<rect x="${i.x-5}" y="${i.y-5}" width="${i.w+10}" height="${i.h+10}" fill="none" stroke="${i.c}" stroke-width="2.5"/><text x="${i.x-5}" y="${i.y-9}" font-size="11" fill="${i.c}">${i.k} ${det[i.k]}</text>`}});
+sc.innerHTML=s}
+I.forEach(i=>{const l=document.createElement("label");l.innerHTML=`<input type="checkbox" checked> ${i.k}`;
+l.firstChild.onchange=e=>{on[i.k]=e.target.checked;det=null;draw()};tg.appendChild(l)});
+document.getElementById("run").onclick=()=>{
+det={};let miss=[];
+I.forEach((i,n)=>{if(on[i.k])det[i.k]=(0.9+((n*37+runs*11)%9)/100).toFixed(2);else miss.push(i.k)});
+runs++;objs+=I.length;
+ls.innerHTML=I.map(i=>`<li><span>${i.k}</span><span class="${det[i.k]?'ok':'no'}">${det[i.k]?'Found '+det[i.k]:'MISSING'}</span></li>`).join("");
+const a=document.getElementById("al");a.hidden=false;a.className="al"+(miss.length?" bad":"");
+a.textContent=miss.length?"⚠ Not safe: missing "+miss.join(", ")+".":"✔ All 7 safety objects detected.";
+document.getElementById("n").textContent=runs;document.getElementById("o").textContent=objs;draw()};
+draw();
+</script></body></html>
